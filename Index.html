@@ -1,0 +1,250 @@
+﻿<!DOCTYPE html>
+<html lang="ur">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>WhatsApp Pro - Muneeb Admin</title>
+    <style>
+        :root { --wa-bg: #0b141a; --wa-header: #202c33; --wa-accent: #00a884; --wa-text: #e9edef; --wa-sent: #005c4b; --wa-received: #202c33; --wa-gray: #8696a0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background: var(--wa-bg); color: var(--wa-text); height: 100vh; overflow: hidden; }
+
+        .screen { position: fixed; inset: 0; display: none; flex-direction: column; z-index: 100; background: var(--wa-bg); }
+        .active-screen { display: flex; }
+
+        /* Headers & Tabs */
+        .header { background: var(--wa-header); padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .tabs { background: var(--wa-header); display: flex; border-bottom: 1px solid #222d34; }
+        .tab { flex: 1; padding: 15px; text-align: center; cursor: pointer; color: var(--wa-gray); font-weight: bold; font-size: 14px; text-transform: uppercase; }
+        .tab.active { color: var(--wa-accent); border-bottom: 3px solid var(--wa-accent); }
+
+        /* Content Areas */
+        .content { flex: 1; overflow-y: auto; display: none; }
+        .active-content { display: block; }
+        .list-item { display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #222d34; cursor: pointer; }
+        .avatar { width: 50px; height: 50px; border-radius: 50%; margin-right: 15px; background: #4f5e67; object-fit: cover; }
+
+        /* Calling UI */
+        #callScreen { background: #075e54; z-index: 10000; align-items: center; justify-content: space-around; color: white; }
+        .video-full { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .call-ctrls { display: flex; gap: 30px; z-index: 20; margin-bottom: 40px; }
+        .ctrl-btn { padding: 20px; border-radius: 50%; cursor: pointer; font-size: 24px; display: flex; align-items: center; justify-content: center; }
+
+        /* Popups & Modals */
+        .modal-box { background: var(--wa-header); padding: 30px; border-radius: 20px; width: 85%; max-width: 350px; text-align: center; margin: auto; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; background: #2a3942; color: white; outline: none; }
+        button { width: 100%; padding: 12px; background: var(--wa-accent); border: none; border-radius: 8px; font-weight: bold; color: #0b141a; cursor: pointer; }
+        
+        /* Floating Button */
+        .fab { position: absolute; bottom: 20px; right: 20px; background: var(--wa-accent); width: 55px; height: 55px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #0b141a; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    </style>
+</head>
+<body>
+
+    <div id="screen-lock" class="screen">
+        <div class="modal-box">
+            <div style="font-size: 50px;">🔒</div>
+            <h3 style="margin: 15px 0;">WhatsApp Locked</h3>
+            <input type="password" id="lock-pin" placeholder="Enter PIN">
+            <button onclick="unlockApp()">Unlock</button>
+        </div>
+    </div>
+
+    <div id="screen-login" class="screen">
+        <div class="modal-box">
+            <h2 style="color: var(--wa-accent); margin-bottom: 15px;">WhatsApp Setup</h2>
+            <input type="text" id="login-name" placeholder="Apna Naam...">
+            <button onclick="doLogin()">Agreed & Continue</button>
+        </div>
+    </div>
+
+    <div id="screen-main" class="screen">
+        <div class="header">
+            <h2 style="color: var(--wa-gray);">WhatsApp</h2>
+            <div onclick="openSettings()" style="cursor:pointer; font-size: 22px;">⋮</div>
+        </div>
+        <div class="tabs">
+            <div class="tab active" id="tab-chats" onclick="switchTab('chats')">Chats</div>
+            <div class="tab" id="tab-status" onclick="switchTab('status')">Status</div>
+            <div class="tab" id="tab-calls" onclick="switchTab('calls')">Calls</div>
+        </div>
+
+        <div id="content-chats" class="content active-content">
+            <div id="contact-list"></div>
+            <div class="fab" onclick="addContact()">+</div>
+        </div>
+
+        <div id="content-status" class="content">
+            <div class="list-item" onclick="document.getElementById('statusInp').click()">
+                <img id="my-status-avatar" class="avatar">
+                <div><strong>My Status</strong><br><small>Tap to add status update</small></div>
+            </div>
+            <input type="file" id="statusInp" hidden accept="image/*" onchange="postStatus(this)">
+            <div style="padding: 15px; color: var(--wa-gray); font-size: 14px;">Recent Updates</div>
+            <div id="status-list"></div>
+        </div>
+
+        <div id="content-calls" class="content">
+            <div id="call-logs-list"></div>
+            <div style="padding: 20px; text-align:center; color: var(--wa-gray);" id="no-calls-msg">No recent calls</div>
+        </div>
+    </div>
+
+    <div id="screen-chat" class="screen">
+        <div class="header">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span onclick="closeChat()" style="font-size:20px; cursor:pointer;">←</span>
+                <img id="chat-head-img" class="avatar" style="width:35px; height:35px; margin:0;">
+                <strong id="chat-head-name">User</strong>
+            </div>
+            <div style="display:flex; gap: 20px;">
+                <span onclick="startCall('video')" style="cursor:pointer;">📹</span>
+                <span onclick="startCall('audio')" style="cursor:pointer;">📞</span>
+            </div>
+        </div>
+        <div class="chat-box" id="chat-messages" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:8px;"></div>
+        <div class="header" style="padding: 10px; gap: 10px;">
+            <input type="text" id="msg-input" placeholder="Message..." style="margin:0;">
+            <button onclick="sendMsg()" style="width:50px; border-radius:50%; padding:10px;">➤</button>
+        </div>
+    </div>
+
+    <div id="screen-settings" class="screen">
+        <div class="header"><span onclick="showApp()" style="cursor:pointer;">← Settings</span></div>
+        <div class="list-item" onclick="showScreen('screen-profile')">
+            <img id="set-prof-img" class="avatar" style="width:60px; height:60px;">
+            <div><strong id="set-prof-name">Name</strong><br><small id="set-prof-about">Available</small></div>
+        </div>
+        <div class="list-item" onclick="showScreen('screen-privacy')"><strong>Privacy (App Lock)</strong></div>
+        <div class="list-item" onclick="doLogout()" style="color: #ef5350;"><strong>Logout</strong></div>
+    </div>
+
+    <div id="callScreen" class="screen">
+        <video id="remoteVideo" class="video-full" autoplay playsinline></video>
+        <video id="localVideo" style="position:absolute; top:20px; right:20px; width:100px; height:150px; border-radius:10px; border:2px solid white; display:none;" autoplay playsinline muted></video>
+        <div id="audio-ui" style="text-align:center; z-index:15;">
+            <div class="avatar" style="width:120px; height:120px; margin:auto; border:2px solid white;"></div>
+            <h2 id="call-user-name">User</h2>
+            <p id="call-status">WhatsApp Call...</p>
+        </div>
+        <div class="call-ctrls">
+            <div class="ctrl-btn" style="background:#ff3b30;" onclick="endCall()">❌</div>
+            <div class="ctrl-btn" style="background:#25d366; display:none;" id="answer-btn" onclick="acceptCall()">📞</div>
+        </div>
+        <audio id="ringtone" src="https://www.soundjay.com/phone/phone-calling-1.mp3" loop></audio>
+    </div>
+
+<script>
+    const signalURL = "https://script.google.com/macros/s/AKfycbwMHVLOqh4UCVSyLFfDqTlz_nn19adCHIQly6DHJvlJ2jZH1A8idWixz3QE2_MS8Oc4/exec";
+    
+    let myData = JSON.parse(localStorage.getItem('wa_data')) || { 
+        name: "", dp: "https://ui-avatars.com/api/?name=User", about: "Available", pin: "1234", lock: false, 
+        status: null, callLogs: [] 
+    };
+    let contacts = JSON.parse(localStorage.getItem('wa_contacts')) || ["Khalid", "Anas"];
+    let activeUser = "";
+    let stream;
+
+    window.onload = () => {
+        if(myData.name) {
+            if(myData.lock) showScreen('screen-lock');
+            else showApp();
+        } else showScreen('screen-login');
+        setInterval(checkForIncomingCall, 3000);
+    }
+
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen'));
+        document.getElementById(id).classList.add('active-screen');
+    }
+
+    function switchTab(tabName) {
+        document.querySelectorAll('.content').forEach(c => c.classList.remove('active-content'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('content-' + tabName).classList.add('active-content');
+        document.getElementById('tab-' + tabName).classList.add('active');
+        if(tabName === 'calls') renderCalls();
+    }
+
+    function showApp() { 
+        showScreen('screen-main'); 
+        updateUI(); 
+        renderContacts(); 
+    }
+
+    function updateUI() {
+        document.getElementById('my-status-avatar').src = myData.dp;
+        document.getElementById('set-prof-img').src = myData.dp;
+        document.getElementById('set-prof-name').innerText = myData.name;
+        document.getElementById('set-prof-about').innerText = myData.about;
+    }
+
+    function doLogin() {
+        let n = document.getElementById('login-name').value;
+        if(n) { myData.name = n; save(); showApp(); }
+    }
+
+    function renderContacts() {
+        let h = "";
+        contacts.forEach(c => {
+            h += `<div class="list-item" onclick="openChat('${c}')"><img src="https://ui-avatars.com/api/?name=${c}" class="avatar"><strong>${c}</strong></div>`;
+        });
+        document.getElementById('contact-list').innerHTML = h;
+    }
+
+    function postStatus(input) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            myData.status = e.target.result;
+            save();
+            alert("Status Updated!");
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+
+    function renderCalls() {
+        const list = document.getElementById('call-logs-list');
+        const msg = document.getElementById('no-calls-msg');
+        if(myData.callLogs.length > 0) {
+            msg.style.display = "none";
+            list.innerHTML = myData.callLogs.map(log => `
+                <div class="list-item">
+                    <img src="https://ui-avatars.com/api/?name=${log.user}" class="avatar">
+                    <div style="flex:1"><strong>${log.user}</strong><br><small>${log.time}</small></div>
+                    <span>${log.type === 'video' ? '📹' : '📞'}</span>
+                </div>
+            `).join('');
+        }
+    }
+
+    async function startCall(type) {
+        showScreen('callScreen');
+        document.getElementById('call-user-name').innerText = activeUser;
+        document.getElementById('ringtone').play();
+        
+        // Log Call
+        myData.callLogs.unshift({ user: activeUser, type: type, time: new Date().toLocaleTimeString() });
+        save();
+
+        fetch(signalURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "call", from: myData.name, to: activeUser, type: type }) });
+
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
+        if(type === 'video') {
+            document.getElementById('localVideo').style.display = "block";
+            document.getElementById('localVideo').srcObject = stream;
+            document.getElementById('audio-ui').style.display = "none";
+        }
+    }
+
+    function endCall() {
+        if(stream) stream.getTracks().forEach(t => t.stop());
+        document.getElementById('ringtone').pause();
+        showApp();
+    }
+
+    function save() { localStorage.setItem('wa_data', JSON.stringify(myData)); }
+    function openChat(name) { activeUser = name; document.getElementById('chat-head-name').innerText = name; showScreen('screen-chat'); }
+    function closeChat() { showApp(); }
+</script>
+</body>
+</html>
